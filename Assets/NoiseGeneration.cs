@@ -5,60 +5,69 @@ using System;
 
 public class NoiseGeneration : MonoBehaviour 
 {
-    //public int test;
     public int Number_Of_Octaves;
-    public float persistence;
-    private float[,] heightMap = new float[terrainSize,terrainSize];
+    public float persistence;    
+    public int terrainSize, terrainHeight;
+    public Terrain terrain;
     
     private Texture2D texture;
-    private int textureRes = 256;
-    
-    public const int terrainSize = 512;
-    public Terrain terrain;
+    private int textureRes = 512;
 
-    //void Awake()
-    //{
-    //    texture = new Texture2D(textureRes, textureRes, TextureFormat.RGB24,true);
-    //    texture.name = "TextureTest";
-    //    texture.wrapMode = TextureWrapMode.Clamp;
-    //    GetComponent<Renderer>().material.mainTexture = texture;
-    //    //FillTexture();
-    //}
+    public bool recalculate = false;
+
+    public float roughness_factor = 1;
+
+    void Awake()
+    {
+        texture = new Texture2D(textureRes, textureRes, TextureFormat.RGB24, true);
+        texture.name = "TextureTest";
+        texture.wrapMode = TextureWrapMode.Clamp;
+        GetComponent<Renderer>().material.mainTexture = texture;
+        //FillTexture();
+    }
 
     void Start()
     {
-        //float stepSize = 1f / textureRes;
-        //for (int i = 0; i < terrainSize; i += 2)
-        //{
-        //    for (int j = 0; j < terrainSize; j+=2)
-        //    {
-        //        float h,s,v;
-        //        float temp = PerlinNoise_2D(i,j);
-
-        //        heightMap[j, i] = temp;
-        //        Color heightMapColor = new Color(temp, temp, temp);
-        //        EditorGUIUtility.RGBToHSV(heightMapColor, out h, out s, out v);
-        //        texture.SetPixel(i, j, new Color(v,v,v,1));
-
-        //    }
-        //}
-        //texture.Apply();
-        //terrain.terrainData.SetHeights(0, 0, heightMap);
-
         //second attempt
-
-        float[,] fbm = genNoise(terrainSize);       
-        terrain.terrainData.SetHeights(0, 0, GeneratePerlinNoise(fbm, Number_Of_Octaves,terrainSize));
-
+        float[,] fbm = genNoise(terrainSize);
+        
+        terrain.terrainData.heightmapResolution = terrainSize;
+        terrain.terrainData.alphamapResolution = 128;
+        terrain.terrainData.SetDetailResolution(terrainSize - 1, 16);
+        terrain.terrainData.baseMapResolution = terrainSize - 1 + 1;
+        terrain.terrainData.SetHeights(0, 0, GenerateFBMNoise(fbm, Number_Of_Octaves));
+        terrain.terrainData.size = new Vector3(terrainSize - 1, terrainHeight, terrainSize - 1);
+        //terrain.terrainData[col * CHUNKS + row].splatPrototypes = test;
     }
 
-    void FillTexture()
+    void Update()
     {
+        if(recalculate == true)
+        {
+            float[,] fbm = genNoise(terrainSize);
+            terrain.terrainData.heightmapResolution = terrainSize;
+            terrain.terrainData.alphamapResolution = 128;
+            terrain.terrainData.SetDetailResolution(terrainSize - 1, 16);
+            terrain.terrainData.baseMapResolution = terrainSize - 1 + 1;
+            terrain.terrainData.SetHeights(0, 0, GenerateFBMNoise(fbm, Number_Of_Octaves));
+            terrain.terrainData.size = new Vector3(terrainSize - 1, terrainHeight, terrainSize - 1);
+            recalculate = false;
+        }
+    }
+
+    void FillTexture(float [,] noiseData)
+    {
+        float stepSize = 1f / textureRes;
         for (int i = 0; i < textureRes; i++)
         {
             for (int j = 0; j < textureRes; j++)
             {
-                texture.SetPixel(i, j, Color.red);
+                float h, s, v;
+                float temp = noiseData[i, j];
+                Color heightMapColor = new Color(temp, temp, temp);
+                EditorGUIUtility.RGBToHSV(heightMapColor, out h, out s, out v);
+                texture.SetPixel(i, j, new Color(v, v, v, 1));
+
             }
         }
         texture.Apply();
@@ -79,90 +88,227 @@ public class NoiseGeneration : MonoBehaviour
         return values;
     }
 
-    float [,] genSmoothNoise(float [,] noise, int octave, int size)
-    {       
-        float[,] smoothNoise = new float [size,size];
+    float [,] genSmoothNoise(float [,] noise, int octave)
+    {
+        float[,] smoothNoise = new float[terrainSize, terrainSize];
  
-        int samplePeriod = 1 << octave; // calculates 2 ^ k
+        int samplePeriod = 1 << octave; // calculates 2 ^ octave (the kth octave)
         float sampleFrequency = 1.0f / samplePeriod;
  
-        for (int i = 0; i < size; i++)
+        for (int i = 0; i < terrainSize; i++)
         {
-          //calculate the horizontal sampling indices
-          int sample_i0 = (i / samplePeriod) * samplePeriod;
-          int sample_i1 = (sample_i0 + samplePeriod) % size; //wrap around
-          float horizontal_blend = (i - sample_i0) * sampleFrequency;
+            //calculate the horizontal sampling indices
+            int sample_i0 = (i / samplePeriod) * samplePeriod;
+            int sample_i1 = (sample_i0 + samplePeriod) % terrainSize; //wrap around
+            float horizontal_blend = (i - sample_i0) * sampleFrequency;
+            
+            //int sample_i0 = (i - 1 / samplePeriod) * samplePeriod;
+
+            //int sample_i1 = (i / samplePeriod) * samplePeriod;
+            //int sample_i2 = (sample_i1 + samplePeriod) % terrainSize; //wrap around
+
+            //int sample_i3 = 0;
+            //if(i < terrainSize - 1)
+            //    sample_i3= (sample_i2 + samplePeriod) % terrainSize;             
+            
+            //float horizontal_blend = (i - sample_i1) * sampleFrequency;
  
-          for (int j = 0; j < size; j++)
-          {
-             //calculate the vertical sampling indices
-             int sample_j0 = (j / samplePeriod) * samplePeriod;
-             int sample_j1 = (sample_j0 + samplePeriod) % size; //wrap around
-             float vertical_blend = (j - sample_j0) * sampleFrequency;
- 
-             //blend the top two corners
-             float top = Interpolate(noise[sample_i0,sample_j0],
-                noise[sample_i1,sample_j0], horizontal_blend);
- 
-             //blend the bottom two corners
-             float bottom = Interpolate(noise[sample_i0,sample_j1],
-                noise[sample_i1,sample_j1], horizontal_blend);
- 
-             //final blend
-             smoothNoise[i,j] = Interpolate(top, bottom, vertical_blend);
-          }
-       }
- 
-       return smoothNoise;
+            for (int j = 0; j < terrainSize; j++)
+            {
+                //calculate the vertical sampling indices
+                int sample_j0 = (j / samplePeriod) * samplePeriod;
+                int sample_j1 = (sample_j0 + samplePeriod) % terrainSize; //wrap around
+                float vertical_blend = (j - sample_j0) * sampleFrequency;
+  
+                
+                //blend the top two corners
+                float top = Interpolate(noise[sample_i0,sample_j0],
+                   noise[sample_i1,sample_j0], horizontal_blend);
+  
+                //blend the bottom two corners
+                float bottom = Interpolate(noise[sample_i0,sample_j1],
+                   noise[sample_i1,sample_j1], horizontal_blend);
+  
+                //final blend
+                smoothNoise[i,j] = Interpolate(top, bottom, vertical_blend);
+                
+
+                ////Testing Cubic Interpolation
+                ////int sample_j0 = (j-1 / samplePeriod) * samplePeriod;
+                //int sample_j1 = (j / samplePeriod) * samplePeriod;
+                //int sample_j2 = (sample_j1 + samplePeriod) % terrainSize; //wrap around
+                ////int sample_j3 = (sample_j2 + samplePeriod) % terrainSize;             
+           
+                ////float vertical_blend = (i - sample_j1) * sampleFrequency;
+
+                ////float top = Cubic_Interpolate(noise[sample_i0, sample_j0], noise[sample_i1, sample_j1], noise[sample_i2, sample_j2], noise[sample_i3, sample_j0], horizontal_blend);
+                ////float bottom = Cubic_Interpolate(noise[sample_i0, sample_j1], noise[sample_i1, sample_j1], noise[sample_i2, sample_j1], noise[sample_i3, sample_j1], horizontal_blend);
+
+                //float x = noise[sample_i2,sample_j1] - noise[sample_i1,sample_j1];
+                ////float temp = Cubic_Interpolate(pointbefore,top,bottom, pointafter,vertical_blend);
+                ////if (noise[sample_i0, sample_j1] == null || noise[sample_i1, sample_j1] == null || noise[sample_i2, sample_j1] == null || noise[sample_i3, sample_j1] == null)
+                ////    Debug.Log("i " + i + " j " + j + "  " + sample_i0 + "  " + sample_i1 + "  " + sample_i2 + "  " + sample_i3 + "  " + sample_j1);
+                //smoothNoise[i, j] = Cubic_Interpolate(noise[sample_i0, sample_j1], noise[sample_i1, sample_j1], noise[sample_i2, sample_j1], noise[sample_i1, sample_j1], horizontal_blend);
+
+            }
+         }
+        return smoothNoise;
     }
 
     float Interpolate(float x0, float x1, float alpha)
     {
-        return x0 * (1 - alpha) + alpha * x1;
+        float ft = alpha * 3.1415927f;
+        float f = (1 - Mathf.Cos(ft)) * 0.5f;
+
+        return x0 * (1 - f) + x1 * f;
+
+        //return x0 * (1 - alpha) + alpha * x1;
     }
 
-    float[,] GeneratePerlinNoise(float[,] noise, int octaveCount, int size)
+    float Cubic_Interpolate(float v0, float v1, float v2, float v3, float x)
+    {
+        float P = (v3 - v2) - (v0 - v1);
+        float Q = (v0 - v1) - P;
+        float R = v2 - v0;
+        float S = v1;
+
+        return (P * Mathf.Pow(x, 3)) + (Q * Mathf.Pow(x, 2)) + (R * x) + S;
+    }
+
+    float[,] GenerateFBMNoise(float[,] noise, int octaveCount)
     {
        float[][,] smoothNoise = new float[octaveCount][,];
  
-       float persistance = 0.5f;
+       float _persistance = persistence;
  
        //generate smooth noise
        for (int i = 0; i < octaveCount; i++)
        {
-           smoothNoise[i] = genSmoothNoise(noise, i,size);
-       }
- 
-       float[,] perlinNoise = new float [size,size];
+           smoothNoise[i] = genSmoothNoise(noise, i);
+       }       
+       float[,] fbm = new float [terrainSize,terrainSize];
        float amplitude = 1.0f;
        float totalAmplitude = 0.0f;
  
        //blend noise together
        for (int octave = octaveCount - 1; octave >= 0; octave--)
        {
-           amplitude *= persistance;
+           amplitude *= _persistance;
            totalAmplitude += amplitude;
- 
-           for (int i = 0; i < size; i++)
+
+           for (int i = 0; i < terrainSize; i++)
            {
-              for (int j = 0; j < size; j++)
-              {
-                 perlinNoise[i,j] += smoothNoise[octave][i,j] * amplitude;
-              }
+               for (int j = 0; j < terrainSize; j++)
+               {
+                   fbm[i, j] += smoothNoise[octave][i, j] * amplitude;
+               }
            }
-        }
+       }     
  
        //normalisation
-       for (int i = 0; i < size; i++)
+       for (int i = 0; i < terrainSize; i++)
        {
-          for (int j = 0; j < size; j++)
+           for (int j = 0; j < terrainSize; j++)
           {
-             perlinNoise[i,j] /= totalAmplitude;
+             fbm[i,j] /= totalAmplitude;
           }
        }
- 
-       return perlinNoise;
+
+       return fbm;
     }
+
+    //diamond-square algorithm
+    float avgOfEndPoints(int i, int j, int distFromEndPoints, float [,] noise)
+    {
+        return ((float)(noise[i - distFromEndPoints, j - distFromEndPoints] 
+                      + noise[i + distFromEndPoints, j + distFromEndPoints]) * 0.5f);
+    }
+
+    float avgOfDiamondValues(int i, int j, int distFromDiamondCenter, int size, float [,] noise)
+    {
+        if(i == 0)  //bottom left 
+        {
+            return ((float)(noise[(i*size) + j-distFromDiamondCenter, 2]);
+        }
+        else if(j == 0) //bottom left
+        {
+
+        }
+        else if (i == size - 1)  //top right
+        {
+
+        }
+        else if (j == size - 1)  //top right
+        {
+
+        }
+        else    //all points within size. Every other point
+        {
+
+        }
+    }
+
+    float avgOfSquareValues(int i, int j, int distFromEndPoints, float [,] noise)
+    {
+        return ((float)((noise[i-distFromEndPoints,j-distFromEndPoints] + 
+                        noise[i+distFromEndPoints,j-distFromEndPoints] + 
+                        noise[i-distFromEndPoints,j+distFromEndPoints] + 
+                        noise[i+distFromEndPoints,j+distFromEndPoints]) * 0.25f));
+    }
+
+    void diamondSquareNoise(float [,] fbm)
+    {
+        int stride, subSize;
+        float ratio, scale, oddline;
+        float[,] noise = new float[terrainSize,terrainSize];
+
+        subSize = terrainSize;
+        System.Random random = new System.Random(5);
+        ratio = (float)Mathf.Pow(2.0f, -roughness_factor);
+        scale = terrainHeight * ratio;
+        stride = terrainSize / 2;
+        //TODO: change the = 0 to values from FBM noise
+        noise[0,0] = noise[terrainSize-1,terrainSize-1] = noise[0,terrainSize] = noise[terrainSize,0] = fbm[0,0];
+
+        while(stride != 0)
+        {
+            for (int i = stride; i < terrainSize; i+=stride)
+            {
+                for (int j = stride; j < terrainSize; j+=stride)
+                {
+                    noise[i, j] = scale * randomValBetweenRange(0.5f) + avgOfSquareValues(i,j,stride,noise);
+                    j += stride;
+                }
+                i += stride;
+            }
+            oddline = 0;
+            for (int i = 0; i < terrainSize; i+=stride)
+            {
+                for (int j = 0; j < terrainSize; j+=stride)
+                {
+                    if (oddline != 0 && j==0)
+                        j += stride;
+
+                    noise[i,j] = 
+                }
+            }
+        }
+
+        
+
+    }
+
+    float randomValBetweenRange(float value)
+    {
+        return (UnityEngine.Random.Range(-value, value));
+        //int r;
+        //float x;
+        //r = System.Random();
+        //x = (float)(r & 0x7ffff)/(float)0x7ffff;
+        //return (x * (max - min) + min);
+    }
+
+
 
     /*
     float PerlinNoise_2D(float x, float y)
