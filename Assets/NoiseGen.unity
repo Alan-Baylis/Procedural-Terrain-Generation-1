@@ -115,17 +115,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5508e77166b44104fba43214184e7307, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Number_Of_Octaves: 2
-  persistence: 1
-  terrainSize: 65
-  terrainHeight: 8
-  seedValue: 7
+  Number_Of_Octaves: 9
+  persistence: .25
+  terrainSize: 513
+  terrainHeight: 40
+  seedValue: 0
   terrain: {fileID: 1932759443}
   terrain2: {fileID: 2018661435}
   recalculate: 0
-  roughness_factor: .400000006
-  baseScale: 2
-  offset: 2
+  roughness_factor: .5
 --- !u!23 &214851254
 MeshRenderer:
   m_ObjectHideFlags: 0

@@ -17,8 +17,6 @@ public class NoiseGeneration : MonoBehaviour
     public bool recalculate = false;
 
     public float roughness_factor = 1;
-    public float baseScale;
-    public int offset;
 
     void Awake()
     {
@@ -82,16 +80,17 @@ public class NoiseGeneration : MonoBehaviour
         
         
         float[,] dsnInterp = new float[terrainSize, terrainSize];
-        //for (int i = offset; i < terrainSize-offset; i++)
+        //for (int i = 1; i < terrainSize - 2; i++)
         //{
-        //    for (int j = offset; j < terrainSize-offset; j++)
+        //    for (int j = 1; j < terrainSize - 2; j++)
         //    {
-        //        dsnInterp[i, j] = dsn[i, j];
+        //        dsnInterp[i, j] = Cubic_Interpolate(dsn[i - 1, j - 1], dsn[i, j], dsn[i + 1, j + 1], dsn[i + 2, j + 2], dsn[i + 1, j + 1] - dsn[i, j]);
         //    }
         //}
+        //dsnInterp = genSmoothNoise(dsn, Number_Of_Octaves);
 
-        dsnInterp = genSmoothNoise(dsn, Number_Of_Octaves);
-        terrain2.terrainData.SetHeights(0, 0, dsnInterp);
+        //dsnInterp = genSmoothNoise(dsn, Number_Of_Octaves);
+        terrain2.terrainData.SetHeights(0, 0, dsn);
         terrain2.terrainData.size = new Vector3(terrainSize - 1, terrainHeight, terrainSize - 1);
         recalculate = false;
 
@@ -228,13 +227,46 @@ public class NoiseGeneration : MonoBehaviour
        for (int i = 0; i < octaveCount; i++)
        {
            smoothNoise[i] = genSmoothNoise(noise, i);
-       }
-        float[,] fbm = new float[terrainSize, terrainSize];
+       }       
+       //float[,] fbm = new float [terrainSize,terrainSize];
+       //float amplitude = 1.0f;
+       //float totalAmplitude = 0.0f;
+ 
+       ////blend noise together
+       //for (int octave = octaveCount - 1; octave >= 0; octave--)
+       //{
+       //    amplitude *= _persistance;
+       //    totalAmplitude += amplitude;
+
+       //    for (int i = 0; i < terrainSize; i++)
+       //    {
+       //        for (int j = 0; j < terrainSize; j++)
+       //        {
+       //            fbm[i, j] += smoothNoise[octave][i, j] * amplitude;
+       //        }
+       //    }
+       //}     
+ 
+       ////normalisation
+       //for (int i = 0; i < terrainSize; i++)
+       //{
+       //    for (int j = 0; j < terrainSize; j++)
+       //   {
+       //      fbm[i,j] /= totalAmplitude;
+       //   }
+       //}
+
+       return smoothNoise;
+    }
+
+    float [,] mergeNoise(float[,] noise1, float[,] noise2)
+    {
         float amplitude = 1.0f;
         float totalAmplitude = 0.0f;
+        float _persistance = persistence;
 
-        //blend noise together
-        for (int octave = octaveCount - 1; octave >= 0; octave--)
+        float[,] mergedNoise = new float[terrainSize, terrainSize];
+        for (int octave = Number_Of_Octaves - 1; octave >= 0; octave--)
         {
             amplitude *= _persistance;
             totalAmplitude += amplitude;
@@ -243,7 +275,7 @@ public class NoiseGeneration : MonoBehaviour
             {
                 for (int j = 0; j < terrainSize; j++)
                 {
-                    fbm[i, j] += smoothNoise[octave][i, j] * amplitude;
+                    mergedNoise[i, j] += noise1[octave][i, j] * amplitude;
                 }
             }
         }
@@ -256,98 +288,89 @@ public class NoiseGeneration : MonoBehaviour
                 fbm[i, j] /= totalAmplitude;
             }
         }
-
-        return fbm;
     }
-
-    //float [,] mergeNoise(float[,] noise1, float[,] noise2)
-    //{
-    //    float amplitude = 1.0f;
-    //    float totalAmplitude = 0.0f;
-    //    float _persistance = persistence;
-
-    //    float[,] mergedNoise = new float[terrainSize, terrainSize];
-    //    for (int octave = Number_Of_Octaves - 1; octave >= 0; octave--)
-    //    {
-    //        amplitude *= _persistance;
-    //        totalAmplitude += amplitude;
-
-    //        for (int i = 0; i < terrainSize; i++)
-    //        {
-    //            for (int j = 0; j < terrainSize; j++)
-    //            {
-    //                mergedNoise[i, j] += noise1[octave][i, j] * amplitude;
-    //            }
-    //        }
-    //    }
-
-    //    //normalisation
-    //    for (int i = 0; i < terrainSize; i++)
-    //    {
-    //        for (int j = 0; j < terrainSize; j++)
-    //        {
-    //            fbm[i, j] /= totalAmplitude;
-    //        }
-    //    }
-    //}
     
     //diamond-square algorithm
-    
+    float avgOfEndPoints(int i, int j, int distFromEndPoints, float [,] noise)
+    {
+        return ((float)(noise[i - distFromEndPoints, j - distFromEndPoints] 
+                      + noise[i + distFromEndPoints, j + distFromEndPoints]) * randomValBetweenRange(0.5f));
+    }
 
     //get the points to make a new square 
-    float squareStep(int posX, int posY, int distFromEndPoints, float[,] noise, char pos)
-    {        
+    float avgOfDiamondValues(int posX, int posY, int distFromEndPoints, float[,] noise, char pos)
+    {
+        /*
+        if (i == 0)  //bottom  
+        {
+            
+        }
+        else if (j == 0) //left
+        {
+
+        }
+        else if (i == size - 1)  //right
+        {
+
+        }
+        else if (j == size - 1)  //top
+        {
+
+        }
+        else    //all points within size. Every other point
+        {
+
+        }
+        */
         if(pos == 'h')
         {
-            return ((float)((noise[posX - distFromEndPoints, posY] + 
-                            noise[posX + distFromEndPoints,posY])/2));
+            int x = posX - distFromEndPoints;
+            int x2 = posX + distFromEndPoints;
+            return ((float)(noise[posX - distFromEndPoints, posY] + 
+                            noise[posX + distFromEndPoints,posY]) * 0.25f);
         }
         else if(pos == 'v')
         {
-            return ((float)((noise[posX, posY - distFromEndPoints] +
-                            noise[posX, posY + distFromEndPoints])/2));
+            int y = posY - distFromEndPoints;
+            int y2 = posY + distFromEndPoints;
+            return ((float)(noise[posX, posY - distFromEndPoints] +
+                            noise[posX, posY + distFromEndPoints]) * 0.25f);
         }
-        else
-            return -1;
+
+
+        return 0;
     }
 
     //get the center point in a diamond
-    float diamondStep(int i, int j, int distFromEndPoints, float [,] noise)
+    float avgOfSquareValues(int i, int j, int distFromEndPoints, float [,] noise)
     {
         return ((float)((noise[i - distFromEndPoints, j - distFromEndPoints] + 
                          noise[i + distFromEndPoints, j - distFromEndPoints] + 
                          noise[i - distFromEndPoints, j + distFromEndPoints] +  
-                         noise[i + distFromEndPoints, j + distFromEndPoints])/4));
-    }
-    float randomValBetweenRange(float value)
-    {
-        return UnityEngine.Random.Range(-value, value);
+                         noise[i + distFromEndPoints, j + distFromEndPoints]) * 0.25f));
     }
 
-    float [,] diamondSquareNoise(float[,] fbm)
+    float [,] diamondSquareNoise(float [,] fbm)
     {
         int stride, adjustedSize;
-        float ratio;
-        float scale;
+        float ratio, scale;
         float[,] noise = new float[terrainSize,terrainSize];
 
         adjustedSize = terrainSize - 1;
         System.Random random = new System.Random(seedValue);
         ratio = (float)Mathf.Pow(2.0f, -roughness_factor);
-        //scale = UnityEngine.Random.Range(0.0f,1.0f) * ratio;
-
-        scale = baseScale * ratio;
+        scale = UnityEngine.Random.Range(0.0f,1.0f) * ratio;
         stride = adjustedSize / 2;
-
+        //TODO: change the = 0 to values from FBM noise
         noise[0, 0] = noise[adjustedSize, adjustedSize] = noise[0, adjustedSize] = noise[adjustedSize, 0] = fbm[0, 0];
 
-        while(stride != 1)
+        while(stride != 0)
         {
             for (int i = stride; i < adjustedSize; i += stride)
             {
                 for (int j = stride; j < adjustedSize; j += stride)
                 {
-                    noise[i, j] = 2 * scale * randomValBetweenRange(0.5f) + diamondStep(i,j,stride,noise);
+                    noise[i, j] = scale * randomValBetweenRange(0.5f) + avgOfSquareValues(i,j,stride,noise);
                 }
             }
 
@@ -361,24 +384,30 @@ public class NoiseGeneration : MonoBehaviour
 
                    //bottom
                     noise[basePosX + stride, basePosY] = scale * randomValBetweenRange(0.5f) + 
-                                                         squareStep(basePosX + stride,basePosY,stride,noise,'h');
+                                                         avgOfDiamondValues(basePosX + stride,basePosY,stride,noise,'h');
                     //left                    
                     noise[basePosX, basePosY + stride] = scale * randomValBetweenRange(0.5f) +
-                                                         squareStep(basePosX, basePosY + stride, stride, noise, 'v');
+                                                         avgOfDiamondValues(basePosX, basePosY + stride, stride, noise, 'v');
                     //right
                     noise[basePosX + (stride * 2), basePosY + stride] = scale * randomValBetweenRange(0.5f) +
-                                                                        squareStep(basePosX + (stride * 2) , basePosY + stride, stride, noise, 'v');
+                                                                        avgOfDiamondValues(basePosX + (stride * 2) , basePosY + stride, stride, noise, 'v');
                     //top
                     noise[basePosX + stride, basePosY + (stride * 2)] = scale * randomValBetweenRange(0.5f) + 
-                                                                        squareStep(basePosX + stride, basePosY + (stride * 2) , stride, noise, 'h');
+                                                                        avgOfDiamondValues(basePosX + stride, basePosY + (stride * 2) , stride, noise, 'h');
                 }
             }
-            scale = baseScale * Mathf.Pow(2.0f, -0.75f) ;
+            scale *= ratio;
             stride = stride / 2;
         }
 
         return noise;
-    }    
+    }
+
+    float randomValBetweenRange(float value)
+    {
+        float temp = UnityEngine.Random.Range(-value, value);
+        return temp;
+    }
 
     /*
     float PerlinNoise_2D(float x, float y)
