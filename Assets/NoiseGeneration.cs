@@ -10,8 +10,10 @@ public class NoiseGeneration : MonoBehaviour
     public int terrainSize, terrainHeight, textureBlendOffset, seedValue;
     public float smooth_factor;
     public int chunkSize;
-    public Terrain terrain;
+    //public Terrain terrain;
     private int terrainSizePOT;
+    private GameObject[,] terrain;
+    private TerrainData[,] tData;
 
     private int textureRes;
     public float contrastScale;
@@ -21,11 +23,11 @@ public class NoiseGeneration : MonoBehaviour
     public enum NoiseType { FBM, DSN, BOTH };
     public NoiseType noiseType = NoiseType.BOTH;
     SplatPrototype[] splatProto = new SplatPrototype[2];
+    System.Random random;
 
     void Awake()
     {
-        terrainSizePOT = terrainSize - 1;
-        textureRes = terrainSizePOT;
+        
         texture = new Texture2D(textureRes, textureRes, TextureFormat.RGB24, true);
         texture.name = "TextureTest";
         texture.wrapMode = TextureWrapMode.Clamp;
@@ -42,6 +44,14 @@ public class NoiseGeneration : MonoBehaviour
         splatProto[1].tileSize = new Vector2(textureRes, textureRes);
     }
 
+    void Start()
+    {
+        terrain = new GameObject[chunkSize,chunkSize];
+        tData = new TerrainData[chunkSize,chunkSize];
+        terrainSizePOT = terrainSize - 1; 
+        textureRes = terrainSizePOT;
+        random = new System.Random(seedValue);
+    }
     void Update()
     {
         if (RECALCULATE == true)
@@ -54,55 +64,69 @@ public class NoiseGeneration : MonoBehaviour
 
     void RedrawTerrain()
     {
-        float[,] fbm, dsn;
-        float[][,] terrains = new float[chunkSize][,];
-        for (int i = 0; i < chunkSize; i++)
-        {
-            terrains[i] = new float[terrainSize, terrainSize];
-        }
+        //float[,][,] terrainNoise = new float[chunkSize,chunkSize][,];
 
         if (noiseType == NoiseType.FBM)
         {
-            fbm = genNoise(terrainSizePOT);
-            InitializeTerrain();
-            float[,] test = new float[terrainSizePOT, terrainSizePOT];
-            test = GenerateFBMNoise(fbm, Number_Of_Octaves);
-            terrain.terrainData.SetHeights(0, 0, test);
-            FillTexture(test);
+            for (int i = 0; i < chunkSize; i++)
+            {
+                for (int j = 0; j < chunkSize;)
+                {
+                    float[,] terrainNoise = new float[terrainSize, terrainSize];
+                    //Generate noise for each chunk
+                    terrainNoise = GenerateFBMNoise(Number_Of_Octaves);
+
+                    //Generate Terrain Data for each chunk
+                    tData[i,j] = InitializeTerrain(i,j,terrainNoise);
+
+                    //Generate each Terrain chunk
+                    terrain[i,j] = Terrain.CreateTerrainGameObject(tData[i,j]);
+
+                    //Position the terrain
+                    terrain[i,j].transform.position = new Vector3(i*terrainSize,0, j * terrainSize);
+                    //Add Texture to each chunk
+                    //FillTexture(terrains[i]);
+
+                    j++;
+                }
+            }
+
         }
 
-        else if (noiseType == NoiseType.DSN)
-        {
-            dsn = GenerateDSNNoise();
-            float[,] dsnInterp = new float[terrainSizePOT, terrainSizePOT];
-            dsnInterp = genSmoothNoise(dsn, Number_Of_Octaves);
-            InitializeTerrain();
-            terrain.terrainData.SetHeights(0, 0, dsnInterp);
-            FillTexture(dsnInterp);
-        }
+        //else if (noiseType == NoiseType.DSN)
+        //{
+        //    dsn = GenerateDSNNoise();
+        //    float[,] dsnInterp = new float[terrainSizePOT, terrainSizePOT];
+        //    dsnInterp = genSmoothNoise(dsn, Number_Of_Octaves);
+        //    InitializeTerrain();
+        //    terrain.terrainData.SetHeights(0, 0, dsnInterp);
+        //    FillTexture(dsnInterp);
+        //}
 
-        else if (noiseType == NoiseType.BOTH)
-        {
-            fbm = genNoise(terrainSizePOT);
-            dsn = GenerateDSNNoise();
-            float[,] newNoise = mergeNoise(fbm, dsn);
-            newNoise = genSmoothNoise(newNoise, Number_Of_Octaves);
-            InitializeTerrain();
-            terrain.terrainData.SetHeights(0, 0, newNoise);
-            FillTexture(newNoise);
-        }
+        //else if (noiseType == NoiseType.BOTH)
+        //{
+        //    fbm = genNoise(terrainSize, 0);
+        //    dsn = GenerateDSNNoise();
+        //    float[,] newNoise = mergeNoise(fbm, dsn);
+        //    newNoise = genSmoothNoise(newNoise, Number_Of_Octaves);
+        //    InitializeTerrain();
+        //    terrain.terrainData.SetHeights(0, 0, newNoise);
+        //    FillTexture(newNoise);
+        //}
 
         RECALCULATE = false;
     }
-    void InitializeTerrain()
+    TerrainData InitializeTerrain(int i, int j, float[,] noise)
     {
-        terrain.terrainData.heightmapResolution = terrainSizePOT;
-        terrain.terrainData.alphamapResolution = textureRes;
-
-        terrain.terrainData.SetDetailResolution(textureRes, 16);
-        terrain.terrainData.baseMapResolution = textureRes;
-        terrain.terrainData.size = new Vector3(terrainSizePOT, terrainHeight, terrainSizePOT);
-        terrain.terrainData.splatPrototypes = splatProto;
+        TerrainData t = new TerrainData();
+        t.heightmapResolution = terrainSizePOT;
+        t.alphamapResolution = textureRes;
+        t.SetDetailResolution(textureRes, 16);
+        t.baseMapResolution = textureRes;
+        t.size = new Vector3(terrainSizePOT, terrainHeight, terrainSizePOT);
+        t.SetHeights(0,0,noise);
+        t.splatPrototypes = splatProto;
+        return t;
     }
 
     void FillTexture(float[,] noiseData)
@@ -133,7 +157,7 @@ public class NoiseGeneration : MonoBehaviour
                 singlePoint[i, j, 1] = v;
             }
         }
-        terrain.terrainData.SetAlphamaps(0, 0, singlePoint);
+        //terrain.terrainData.SetAlphamaps(0, 0, singlePoint);
 
         texture.Apply(false);
         //quad.GetComponent<Renderer>().material.mainTexture = texture;
@@ -158,13 +182,13 @@ public class NoiseGeneration : MonoBehaviour
 
     //FRACTAL-BROWNIAN MOTION
 
-    float[,] genNoise(int size, int offset)
+    float[,] genNoise()
     {
-        System.Random random = new System.Random(seedValue);
-        float[,] values = new float[size, size];
-        for (int i = offset; i < offset + size; i++)
+        //random = new System.Random(seedValue);
+        float[,] values = new float[terrainSize, terrainSize];
+        for (int i = 0; i < terrainSize; i++)
         {
-            for (int j = offset; j < offset + size; j++)
+            for (int j = 0; j < terrainSize; j++)
             {
                 values[i, j] = (float)random.NextDouble() % 1;
             }
@@ -175,22 +199,22 @@ public class NoiseGeneration : MonoBehaviour
 
     float[,] genSmoothNoise(float[,] noise, int octave)
     {
-        float[,] smoothNoise = new float[terrainSizePOT, terrainSizePOT];
+        float[,] smoothNoise = new float[terrainSize, terrainSize];
 
         int samplePeriod = 1 << octave; // calculates 2 ^ octave (the kth octave)
         float sampleFrequency = 1.0f / samplePeriod;
 
-        for (int i = 0; i < terrainSizePOT; i++)
+        for (int i = 0; i < terrainSize; i++)
         {
             //calculate the horizontal sampling indices
             int sample_i0 = (i / samplePeriod) * samplePeriod;
-            int sample_i1 = (sample_i0 + samplePeriod) % terrainSizePOT; //wrap around
+            int sample_i1 = (sample_i0 + samplePeriod) % terrainSize; //wrap around
             float horizontal_blend = (i - sample_i0) * sampleFrequency;
-            for (int j = 0; j < terrainSizePOT; j++)
+            for (int j = 0; j < terrainSize; j++)
             {
                 //calculate the vertical sampling indices
                 int sample_j0 = (j / samplePeriod) * samplePeriod;
-                int sample_j1 = (sample_j0 + samplePeriod) % terrainSizePOT; //wrap around
+                int sample_j1 = (sample_j0 + samplePeriod) % terrainSize; //wrap around
                 float vertical_blend = (j - sample_j0) * sampleFrequency;
 
 
@@ -227,30 +251,60 @@ public class NoiseGeneration : MonoBehaviour
         return (P * Mathf.Pow(x, 3)) + (Q * Mathf.Pow(x, 2)) + (R * x) + S;
     }
 
-    float[,] GenerateFBMNoise(float[,] noise, int octaveCount)
+    float[,] GenerateFBMNoise(int octaveCount)
     {
-        float[][,] smoothNoise = new float[octaveCount][,];
-
+        float[,] terrainBaseNoise = genNoise();
+        float[,] fbm = new float[terrainSize, terrainSize];
         float _persistance = persistence;
-
-        //generate smooth noise
-        for (int i = 0; i < octaveCount; i++)
-        {
-            smoothNoise[i] = genSmoothNoise(noise, i);
-        }
-        float[,] fbm = new float[terrainSizePOT, terrainSizePOT];
         float amplitude = 1.0f;
         float totalAmplitude = 0.0f;
 
+        //float[][,] fbm = new float[chunkSize][,];
+        //for (int a = 0; a < chunkSize; a++)
+        //{ 
+        //    float[][,] smoothNoise = new float[octaveCount][,];
+        //    fbm[a] = new float[terrainSize, terrainSize];
+        //    for (int i = 0; i < octaveCount; i++)
+        //    {
+        //        smoothNoise[i] = genSmoothNoise(terrainBaseNoise[a], i);
+        //    }
 
+        //    for (int octave = octaveCount - 1; octave >= 0; octave--)
+        //    {
+        //        amplitude *= _persistance;
+        //        totalAmplitude += amplitude;
+        //        for (int i = 0; i < terrainSize; i++)
+        //        {
+        //            for (int j = 0; j < terrainSize; j++)
+        //            {
+        //                fbm[a][i, j] += smoothNoise[octave][i, j] * amplitude;
+        //            }
+        //        }
+
+        //    }
+
+        //    for (int i = 0; i < terrainSize; i++)
+        //    {
+        //        for (int j = 0; j < terrainSize; j++)
+        //        {
+        //            fbm[a][i, j] /= totalAmplitude;
+        //        }
+        //    }
+        //}
+
+        float[][,] smoothNoise = new float[octaveCount][,];
+        for (int i = 0; i < octaveCount; i++)
+        {
+            smoothNoise[i] = genSmoothNoise(terrainBaseNoise, i);
+        }
         //blend noise together
         for (int octave = octaveCount - 1; octave >= 0; octave--)
         {
             amplitude *= _persistance;
             totalAmplitude += amplitude;
-            for (int i = 0; i < terrainSizePOT; i++)
+            for (int i = 0; i < terrainSize; i++)
             {
-                for (int j = 0; j < terrainSizePOT; j++)
+                for (int j = 0; j < terrainSize; j++)
                 {
                     fbm[i, j] += smoothNoise[octave][i, j] * amplitude;
                 }
@@ -259,9 +313,9 @@ public class NoiseGeneration : MonoBehaviour
         }
 
         //normalisation
-        for (int i = 0; i < terrainSizePOT; i++)
+        for (int i = 0; i < terrainSize; i++)
         {
-            for (int j = 0; j < terrainSizePOT; j++)
+            for (int j = 0; j < terrainSize; j++)
             {
                 fbm[i, j] /= totalAmplitude;
             }
