@@ -7,7 +7,8 @@ public class NoiseGeneration : MonoBehaviour
 {
     public int Number_Of_Octaves;
     public float persistence;
-    public int terrainSize, terrainHeight, textureBlendOffset, seedValue;
+    public int terrainSize, terrainHeight;
+    private int seedValue = 0;
     public float smooth_factor;
     public int chunkSize;
     //public Terrain terrain;
@@ -19,37 +20,43 @@ public class NoiseGeneration : MonoBehaviour
     public float contrastScale;
     private Texture2D texture;
 
-    public bool RECALCULATE = false;
     public enum NoiseType { FBM, DSN, BOTH };
     public NoiseType noiseType = NoiseType.BOTH;
-    SplatPrototype[] splatProto = new SplatPrototype[2];
+    public bool RECALCULATE = false;
+    SplatPrototype[] splatProto = new SplatPrototype[3];
     System.Random random;
 
     void Awake()
     {
-        
+        terrainSizePOT = terrainSize - 1;
+        textureRes = terrainSizePOT;
         texture = new Texture2D(textureRes, textureRes, TextureFormat.RGB24, true);
         texture.name = "TextureTest";
         texture.wrapMode = TextureWrapMode.Clamp;
         GetComponent<Renderer>().material.mainTexture = texture;
 
-        splatProto[0] = new SplatPrototype();
-        splatProto[0].texture = (Texture2D)Resources.Load("GoodDirt", typeof(Texture2D));
-        splatProto[0].tileOffset = new Vector2(0, 0);
-        splatProto[0].tileSize = new Vector2(textureRes, textureRes);
+        for (int i = 0; i < 3; i++)
+        {
+            splatProto[i] = new SplatPrototype();
+            splatProto[i].texture = (Texture2D)Resources.Load(i.ToString(), typeof(Texture2D));
+            splatProto[i].tileOffset = new Vector2(0, 0);
+            splatProto[i].tileSize = new Vector2(textureRes, textureRes);
+        }
+        //splatProto[0] = new SplatPrototype();
+        //splatProto[0].texture = (Texture2D)Resources.Load("0", typeof(Texture2D));
+        //splatProto[0].tileOffset = new Vector2(0, 0);
+        //splatProto[0].tileSize = new Vector2(textureRes, textureRes);
 
-        splatProto[1] = new SplatPrototype();
-        splatProto[1].texture = (Texture2D)Resources.Load("snow", typeof(Texture2D));
-        splatProto[1].tileOffset = new Vector2(0, 0);
-        splatProto[1].tileSize = new Vector2(textureRes, textureRes);
+        //splatProto[1] = new SplatPrototype();
+        //splatProto[1].texture = (Texture2D)Resources.Load("snow", typeof(Texture2D));
+        //splatProto[1].tileOffset = new Vector2(0, 0);
+        //splatProto[1].tileSize = new Vector2(textureRes, textureRes);
     }
 
     void Start()
     {
         terrain = new GameObject[chunkSize,chunkSize];
-        tData = new TerrainData[chunkSize,chunkSize];
-        terrainSizePOT = terrainSize - 1; 
-        textureRes = terrainSizePOT;
+        tData = new TerrainData[chunkSize,chunkSize];        
         random = new System.Random(seedValue);
     }
     void Update()
@@ -94,7 +101,8 @@ public class NoiseGeneration : MonoBehaviour
                     //Position the terrain
                     terrain[i,j].transform.position = new Vector3(i*terrainSize,0, j * terrainSize);
                     //Add Texture to each chunk
-                    //FillTexture(terrains[i]);
+
+                    tData[i, j].SetAlphamaps(0, 0, FillTexture(terrainNoise));
                 }
             }
         }
@@ -119,7 +127,8 @@ public class NoiseGeneration : MonoBehaviour
                     //Position the terrain
                     terrain[i, j].transform.position = new Vector3(i * terrainSize, 0, j * terrainSize);
                     //Add Texture to each chunk
-                    //FillTexture(terrains[i]);
+                    FillTexture(dsnInterp);
+                    tData[i, j].SetAlphamaps(0, 0, FillTexture(dsnInterp));
                 }
             }
         }
@@ -154,7 +163,8 @@ public class NoiseGeneration : MonoBehaviour
                     //Position the terrain
                     terrain[i, j].transform.position = new Vector3(i * terrainSize, 0, j * terrainSize);
                     //Add Texture to each chunk
-                    //FillTexture(terrains[i]);
+                    FillTexture(mergedNoise);
+                    tData[i, j].SetAlphamaps(0, 0, FillTexture(mergedNoise));
                 }
             }
         }
@@ -174,13 +184,8 @@ public class NoiseGeneration : MonoBehaviour
         return t;
     }
 
-    void FillTexture(float[,] noiseData)
+    float[,,] FillTexture(float[,] noiseData)
     {
-        //GameObject quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
-        //quad.name += quadNum.ToString();
-        //quad.transform.position = new Vector3(quadNum, 0, 0);
-        //Material mat = new Material(quad.GetComponent<Renderer>().material);
-        //quad.GetComponent<Renderer>().material = mat;
         float[,,] singlePoint = new float[textureRes, textureRes, splatProto.Length];
         float stepSize = 1f / textureRes;
         for (int i = 0; i < textureRes; i++)
@@ -198,27 +203,53 @@ public class NoiseGeneration : MonoBehaviour
                 v = (sigmoidv1 + 1) * 0.5f;
 
                 texture.SetPixel(i, j, new Color(v, v, v, 1));
-                singlePoint[i, j, 0] = 1.0f - v;
-                singlePoint[i, j, 1] = v;
+                
+                float vNormWater = v / 0.5f; 
+                float vNormSnow = (v - 0.6f)/ (1.0f - 0.6f);
+                float vNormLand = (-13.4f * Mathf.Pow(v, 2.0f)) + (15.3f * v) - 3.4f;
+                
+                singlePoint[i, j, 2] = 1 - vNormWater; //water
+                singlePoint[i, j, 0] = vNormSnow;   //snow
+                singlePoint[i, j, 1] = vNormLand;     //land
             }
         }
-        //terrain.terrainData.SetAlphamaps(0, 0, singlePoint);
 
         texture.Apply(false);
-        //quad.GetComponent<Renderer>().material.mainTexture = texture;
+        return singlePoint;
 
         //Save image
-        byte[] data = texture.EncodeToPNG();
-        System.IO.File.WriteAllBytes(Application.dataPath + "/../SavedScreenNewSigmoid.png", data);
+        //byte[] data = texture.EncodeToPNG();
+        //System.IO.File.WriteAllBytes(Application.dataPath + "/../SavedScreenNewSigmoid.png", data);
     }
     float[,] mergeNoise(float[,] noise1, float[,] noise2)
     {
+        float min = 0;
+        float max = 0;
         float[,] mergedNoise = new float[terrainSizePOT, terrainSizePOT];
         for (int i = 0; i < terrainSizePOT; i++)
         {
             for (int j = 0; j < terrainSizePOT; j++)
             {
-                mergedNoise[i, j] = (noise1[i, j] + noise2[i, j]) / 2;
+                mergedNoise[i, j] = (noise1[i, j] + noise2[i, j]);
+                if (mergedNoise[i, j] < min)
+                    min = mergedNoise[i, j];
+                if (mergedNoise[i, j] > max)
+                    max = mergedNoise[i, j];
+            }
+        }
+
+        float newMax = 0;
+        float newMin = 0 ;
+        //Normalize values
+        for (int i = 0; i < terrainSizePOT; i++)
+        {
+            for (int j = 0; j < terrainSizePOT; j++)
+            {
+                mergedNoise[i, j] = (mergedNoise[i, j] - min)/ (max - min);
+                if (mergedNoise[i, j] < newMin)
+                    newMin = mergedNoise[i, j];
+                if (mergedNoise[i, j] > newMax)
+                    newMax = mergedNoise[i, j];
             }
         }
 
