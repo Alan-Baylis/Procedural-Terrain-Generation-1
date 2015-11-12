@@ -115,17 +115,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5508e77166b44104fba43214184e7307, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Number_Of_Octaves: 7
-  persistence: .25
-  terrainSize: 256
+  Number_Of_Octaves: 5
+  persistence: .100000001
+  terrainSize: 257
   terrainHeight: 50
   textureBlendOffset: 0
   seedValue: 0
-  smooth_factor: .200000003
+  smooth_factor: .400000006
   chunkSize: 2
-  contrastScale: 0
+  contrastScale: 3
   RECALCULATE: 0
-  noiseType: 0
+  noiseType: 2
 --- !u!23 &574111131
 MeshRenderer:
   m_ObjectHideFlags: 0
